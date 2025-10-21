@@ -19,12 +19,23 @@
 
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Any, Union
+from typing import Any, Union, TypeVar, Generic, TYPE_CHECKING
 
 import numpy as np
 
+# Import PyQuaticusEnv directly
 from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
-from pyquaticus.moos_bridge.pyquaticus_moos_bridge import PyQuaticusMoosBridge
+
+# Define a dummy PyQuaticusMoosBridge class if not available
+try:
+    from pyquaticus.moos_bridge.pyquaticus_moos_bridge import PyQuaticusMoosBridge
+except ImportError:
+    class PyQuaticusMoosBridge:
+        """Dummy class for when MOOS bridge is not available."""
+        pass
+
+# Define EnvType for type hints
+EnvType = TypeVar('EnvType', PyQuaticusEnv, PyQuaticusMoosBridge)
 
 
 class BaseAgentPolicy:

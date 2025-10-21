@@ -30,7 +30,7 @@ import time
 from pyquaticus.envs.pyquaticus import Team
 import pyquaticus.config
 import copy
-from pyquaticus import pyquaticus_v0
+from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
 import pyquaticus.utils.rewards as reward
 
 class KeyTest:
@@ -76,7 +76,8 @@ class KeyTest:
 
 
     def begin(self):
-        while True:
+        try:
+while True:
             action_dict = self.process_event(self.quittable)
             self.obs, rewards, terminated, truncated, info = self.env.step(action_dict)
             for k in terminated:
@@ -129,9 +130,14 @@ def main():
     config["dynamics"] = "large_usv"
     
     #PyQuaticusEnv is a Parallel Petting Zoo Environment
-    env = pyquaticus_v0.PyQuaticusEnv(team_size=3, render_mode='human', config_dict=config)
+    env = PyQuaticusEnv(team_size=3, render_mode='human', config_dict=config)
     kt = KeyTest(env)
     kt.begin()
 
 if __name__ == "__main__":
     main()
+except KeyboardInterrupt:
+    print("Test stopped by user")
+finally:
+    env.close()
+    print("Environment closed.")

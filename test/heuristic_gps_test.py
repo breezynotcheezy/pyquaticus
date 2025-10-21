@@ -1,8 +1,9 @@
+import numpy as np
 import sys
 import os
 import os.path
 import pyquaticus
-from pyquaticus import pyquaticus_v0
+from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
 from pyquaticus.base_policies.base_attack import BaseAttacker
 from pyquaticus.base_policies.base_defend import BaseDefender
 from pyquaticus.base_policies.base_combined import Heuristic_CTF_Agent
@@ -46,7 +47,7 @@ init_dict = {
 }
 
 
-env = pyquaticus_v0.PyQuaticusEnv(team_size=3, config_dict=config, render_mode="human")
+env = PyQuaticusEnv(team_size=3, config_dict=config, render_mode="human")
 term_g = {'agent_0': False, 'agent_1': False}
 truncated_g = {'agent_0': False, 'agent_1': False}
 term = term_g
@@ -67,6 +68,7 @@ R_two = Heuristic_CTF_Agent('agent_1', env, mode="hard", continuous=True)
 R_three = Heuristic_CTF_Agent('agent_2', env, mode="hard", continuous=True)
 
 step = 0
+try:
 while True:
 
     three = H_one.compute_action(obs, info)
@@ -76,12 +78,18 @@ while True:
     one = R_two.compute_action(obs, info)
     two = R_three.compute_action(obs, info)
 
-    obs, reward, term, trunc, info = env.step(
+    next_obs_dict, rewards, dones, infos = env.step(
         {'agent_0': zero, 'agent_1': one, 'agent_2': two, 'agent_3': three, 'agent_4': four, 'agent_5': five}
     )
     k =  list(term.keys())
 
-    if term[k[0]] == True or trunc[k[0]]==True:
+    if any(dones.values()):
         break
 
 env.close()
+
+except KeyboardInterrupt:
+    print("Test stopped by user")
+finally:
+    env.close()
+    print("Environment closed.")

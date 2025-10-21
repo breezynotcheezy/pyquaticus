@@ -28,7 +28,7 @@ from pygame import KEYDOWN, QUIT, K_ESCAPE
 import sys
 import time
 from pyquaticus.envs.pyquaticus import Team
-from pyquaticus import pyquaticus_v0
+from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
 import pyquaticus.config
 
 RENDER_MODE = 'human'
@@ -73,5 +73,5 @@ if __name__ == '__main__':
     config["default_init"] = False
 
 
-    env = pyquaticus_v0.PyQuaticusEnv(render_mode=RENDER_MODE, team_size=3, config_dict=config)
+    env = PyQuaticusEnv(render_mode=RENDER_MODE, team_size=3, config_dict=config)
     run_one_episode(env)

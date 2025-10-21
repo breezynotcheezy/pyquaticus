@@ -2,7 +2,7 @@ import sys
 import os
 import os.path
 import pyquaticus
-from pyquaticus import pyquaticus_v0
+from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
 from pyquaticus.base_policies.base_attack import BaseAttacker
 from pyquaticus.base_policies.base_defend import BaseDefender
 from pyquaticus.base_policies.base_combined import Heuristic_CTF_Agent
@@ -37,7 +37,7 @@ config_dict["obstacles"] = {
     ]
 }
 
-env = pyquaticus_v0.PyQuaticusEnv(
+env = PyQuaticusEnv(
     team_size=2, config_dict=config_dict, render_mode="human"
 )
 
@@ -77,6 +77,7 @@ R_three.plan(
     wp=env.flag_homes[Team.BLUE_TEAM], num_iters=500
 )
 
+try:
 while True:
 
     two = R_two.compute_action(obs, info)
@@ -84,10 +85,16 @@ while True:
     zero = B_zero.compute_action(obs, info)
     one = B_one.compute_action(obs, info)
 
-    obs, reward, term, trunc, info = env.step({'agent_0':zero,'agent_1':one, 'agent_2':two, 'agent_3':three})
+    next_obs_dict, rewards, dones, infos = env.step({'agent_0':zero,'agent_1':one, 'agent_2':two, 'agent_3':three})
     k = list(term.keys())
 
     if term[k[0]] or trunc[k[0]]:
         break
 
 env.close()
+
+except KeyboardInterrupt:
+    print("Test stopped by user")
+finally:
+    env.close()
+    print("Environment closed.")
