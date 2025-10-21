@@ -70,6 +70,88 @@ def train():
         logger.info(f"Agent {agent_id} - Observation space: {env.observation_spaces[agent_id]}")
     
     logger.info("Environment setup complete")
+
+    # Reward shaping: encourage progress toward enemy flag, penalize OOB/tagged, reward grabs/tags, small step penalty
+    def shaped_reward(agent_id, team, agents, agent_inds_of_team, state, prev_state, **kwargs):
+        try:
+            team_idx = int(team)
+            other_team_idx = int(not team_idx)
+            # determine index of this agent
+            if isinstance(agents, (list, tuple)):
+                i = list(agents).index(agent_id) if agent_id in agents else 0
+            elif isinstance(agents, dict):
+                i = list(agents.keys()).index(agent_id) if agent_id in agents else 0
+            else:
+                i = 0
+            # positions
+            pos = state["agent_position"][i]
+            prev_pos = prev_state["agent_position"][i] if prev_state is not None else pos
+            enemy_flag_pos = state["flag_home"][other_team_idx]
+            # distance progress toward enemy flag
+            d_prev = np.linalg.norm(prev_pos - enemy_flag_pos)
+            d_now = np.linalg.norm(pos - enemy_flag_pos)
+            progress = (d_prev - d_now)  # positive when moving closer
+            # penalties
+            oob_pen = -0.05 if state.get("agent_oob", [False]* (i+1))[i] else 0.0
+            tagged_pen = -0.02 if state.get("agent_is_tagged", [False]* (i+1))[i] else 0.0
+            # sparse bonuses
+            if prev_state is not None:
+                grab_bonus = 1.0 if state.get("grabs", [0,0])[team_idx] > prev_state.get("grabs", [0,0])[team_idx] else 0.0
+                tag_bonus = 0.5 if state.get("tags", [0,0])[team_idx] > prev_state.get("tags", [0,0])[team_idx] else 0.0
+            else:
+                grab_bonus = 0.0
+                tag_bonus = 0.0
+            # small living penalty
+            step_pen = -0.001
+            return 0.2*progress + oob_pen + tagged_pen + grab_bonus + tag_bonus + step_pen
+        except Exception:
+            return 0.0
+
+    # Wire shaped reward per agent if env exposes reward_config
+    if hasattr(env, 'reward_config'):
+        try:
+            # Prefer explicit player IDs if available
+            target_ids = list(getattr(env, 'players', {}).keys()) if hasattr(env, 'players') else list(env.possible_agents)
+            for aid in target_ids:
+                env.reward_config[aid] = shaped_reward
+            logger.info(f"Wired shaped_reward for agents: {target_ids}")
+        except Exception as e:
+            logger.warning(f"Failed to wire shaped rewards: {e}")
+
+    # Helper: map agent_id like 'agent_0' -> 0; fallback to 0
+    def agent_index(aid):
+        try:
+            if isinstance(aid, (int, np.integer)):
+                return int(aid)
+            if isinstance(aid, str) and '_' in aid:
+                return int(aid.split('_')[-1])
+        except Exception:
+            pass
+        return 0
+
+    # Helper: get observation for an agent from obs container
+    def get_obs(obs_container, aid):
+        if isinstance(obs_container, dict):
+            if aid in obs_container:
+                val = obs_container[aid]
+            else:
+                # fallback to first value
+                val = next(iter(obs_container.values()))
+        else:
+            idx = agent_index(aid)
+            val = obs_container[idx]
+        if isinstance(val, dict) and 'observation' in val:
+            return val['observation']
+        return val
+
+    # Helper: get per-agent value from dict or array-like
+    def get_val(container, aid, default=0.0):
+        if isinstance(container, dict):
+            return container.get(aid, default)
+        try:
+            return container[agent_index(aid)]
+        except Exception:
+            return default
     
     if not hasattr(env, 'possible_agents') or not env.possible_agents:
         raise ValueError("No agents found in the environment")
@@ -153,13 +235,15 @@ def train():
 
             while not done and t < max_t:
                 # Get actions for both agents
-                blue_action = blue_agent.act(obs_dict[blue_agent_id]['observation'], eps=eps)
+                blue_state = get_obs(obs_dict, blue_agent_id)
+                blue_action = blue_agent.act(blue_state, eps=eps)
 
                 actions = {blue_agent_id: int(blue_action)}
                 if red_agent_id is not None:
                     # Red agent uses a simple policy (e.g., random or high exploration)
                     red_eps = 0.9
-                    red_action = red_agent.act(obs_dict[red_agent_id]['observation'], eps=red_eps)
+                    red_state = get_obs(obs_dict, red_agent_id)
+                    red_action = red_agent.act(red_state, eps=red_eps)
                     actions[red_agent_id] = int(red_action)
                 
                 # Take a step in the environment with both agents' actions
@@ -176,7 +260,7 @@ def train():
                         raise ValueError(f"Unexpected step return format: {step_return}")
                     
                     # Process the step return for blue agent (our learning agent)
-                    reward = rewards[blue_agent_id]
+                    reward = float(get_val(rewards, blue_agent_id, 0.0))
                     
                     # Log the reward and done status
                     logger.info(f"Processed reward: {reward}, done: {done}")
@@ -184,7 +268,7 @@ def train():
                     # Handle different done formats
                     if isinstance(dones, dict):
                         # end if per-agent done or global done
-                        done = bool(dones.get(blue_agent_id, False) or dones.get("__all__", False))
+                        done = bool(get_val(dones, blue_agent_id, False) or dones.get("__all__", False))
                     else:
                         done = bool(dones)  # Convert to bool if it's a scalar
                     
@@ -193,28 +277,11 @@ def train():
                         done = True
                     
                     # Get the next state for blue agent
-                    if isinstance(next_obs_dict, dict):
-                        if blue_agent_id in next_obs_dict:
-                            agent_obs = next_obs_dict[blue_agent_id]
-                            if isinstance(agent_obs, dict) and 'observation' in agent_obs:
-                                next_state = agent_obs['observation']
-                            else:
-                                next_state = agent_obs
-                        else:
-                            # If agent_id not in dict, try to use the first value
-                            first_key = next(iter(next_obs_dict))
-                            agent_obs = next_obs_dict[first_key]
-                            if isinstance(agent_obs, dict) and 'observation' in agent_obs:
-                                next_state = agent_obs['observation']
-                            else:
-                                next_state = agent_obs
-                    else:
-                        # If not a dict, use as is
-                        next_state = next_obs_dict
+                    next_state = get_obs(next_obs_dict, blue_agent_id)
                         
                     # Store the experience in the blue agent's replay buffer
                     blue_agent.step(
-                        obs_dict[blue_agent_id]['observation'],
+                        blue_state,
                         blue_action,
                         reward,
                         next_state,
@@ -278,7 +345,7 @@ def train():
     
     # Save final model
     final_path = os.path.join(save_dir, 'final_model.pth')
-    agent.save(final_path)
+    blue_agent.save(final_path)
     print(f'Training complete. Final model saved to {final_path}')
     return scores
 

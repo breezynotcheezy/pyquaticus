@@ -19,7 +19,7 @@
 
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Union
+from typing import Union, TYPE_CHECKING
 
 import numpy as np
 
@@ -35,7 +35,13 @@ from pyquaticus.base_policies.utils import (dist_rel_bearing_to_local_rect,
                                             unit_vect_between_points)
 from pyquaticus.config import config_dict_std
 from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
-from pyquaticus.moos_bridge.pyquaticus_moos_bridge import PyQuaticusMoosBridge
+
+# Avoid importing MOOS bridge (and thus pymoos) at runtime unless type-checking
+if TYPE_CHECKING:
+    from pyquaticus.moos_bridge.pyquaticus_moos_bridge import PyQuaticusMoosBridge
+else:
+    class PyQuaticusMoosBridge:  # type: ignore
+        pass
 from pyquaticus.utils.utils import angle180, dist, line_intersection
 
 MODES = {"easy", "medium", "hard", "nothing"}
@@ -47,7 +53,7 @@ class Heuristic_CTF_Agent(BaseAgentPolicy):
     def __init__(
         self,
         agent_id: str,
-        env: Union[PyQuaticusEnv, PyQuaticusMoosBridge],
+        env: Union[PyQuaticusEnv, 'PyQuaticusMoosBridge'],
         flag_keepout: float = config_dict_std["flag_keepout"],
         catch_radius: float = config_dict_std["catch_radius"],
         continuous: bool = False,

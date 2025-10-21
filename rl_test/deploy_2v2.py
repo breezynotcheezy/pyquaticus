@@ -66,13 +66,55 @@ if __name__ == '__main__':
     #Create Environment
     env = pyquaticus_v0.PyQuaticusEnv(config_dict=config_dict,render_mode='human',reward_config=reward_config, team_size=2)
 
-    obs,_ = env.reset()
+    obs, info = env.reset()
 
-    H_one = BaseDefender('agent_0', Team.RED_TEAM, mode='easy')
-    H_two = BaseAttacker('agent_1', Team.RED_TEAM, mode='easy')
+    # Heuristic opponents (use env, not Team as the second arg)
+    H_one = BaseDefender('agent_2', env, mode='easy')
+    H_two = BaseAttacker('agent_3', env, mode='easy')
     
-    policy_one = Policy.from_checkpoint(os.path.abspath(args.policy_one))
-    policy_two = Policy.from_checkpoint(os.path.abspath(args.policy_two))
+    import os
+    ckpt1 = os.path.abspath(args.policy_one)
+    ckpt2 = os.path.abspath(args.policy_two)
+
+    def find_algo_checkpoint(base_path: str) -> str | None:
+        """Search recursively under base_path for RLlib checkpoints.
+        Prefer directories named checkpoint_*, but accept files named checkpoint_* as well.
+        If none found, return a directory containing .rllib_checkpoint.json.
+        """
+        best = None
+        # First pass: directories named checkpoint_*
+        for root, dirs, files in os.walk(base_path):
+            for d in dirs:
+                if d.startswith('checkpoint_'):
+                    cand = os.path.join(root, d)
+                    if best is None or cand > best:
+                        best = cand
+        if best is not None:
+            return best
+        # Second pass: files named checkpoint_*
+        for root, dirs, files in os.walk(base_path):
+            for f in files:
+                if f.startswith('checkpoint_'):
+                    return os.path.join(root, f)
+        # Third pass: parent dir containing RLlib checkpoint marker
+        for root, dirs, files in os.walk(base_path):
+            if '.rllib_checkpoint.json' in files:
+                return root
+        return None
+
+    # Always load Algorithm(s) and fetch policy IDs during action computation
+    from ray.rllib.algorithms.ppo import PPO
+    def resolve_algo(path: str) -> PPO:
+        p = path
+        if not (os.path.exists(p) and os.path.basename(p).startswith('checkpoint_')):
+            discovered = find_algo_checkpoint(p)
+            if discovered is None:
+                raise ValueError(f"Could not find a checkpoint under {p}. Pass a valid RLlib checkpoint path or a folder containing one.")
+            p = discovered
+        return PPO.from_checkpoint(p)
+
+    algo1 = resolve_algo(ckpt1)
+    algo2 = resolve_algo(ckpt2) if ckpt2 != ckpt1 else algo1
     step = 0
     max_step = 2500
 
@@ -83,11 +125,18 @@ if __name__ == '__main__':
             new_obs[k] = env.agent_obs_normalizer.unnormalized(obs[k])
 
         #Get learning agent action from policy
-        zero = policy_one.compute_single_action(obs['agent_0'])[0]
-        one = policy_two.compute_single_action(obs['agent_1'])[0]
+        # Compute actions using algorithm(s) and explicit policy IDs
+        r0 = algo1.compute_single_action(obs['agent_0'], policy_id="agent-0-policy")
+        zero = r0[0] if isinstance(r0, (list, tuple)) else r0
+        try:
+            r1 = algo2.compute_single_action(obs['agent_1'], policy_id="agent-1-policy")
+        except Exception:
+            # Fallback: use algo1 if algo2 doesn't have the policy
+            r1 = algo1.compute_single_action(obs['agent_1'], policy_id="agent-1-policy")
+        one = r1[0] if isinstance(r1, (list, tuple)) else r1
         #Compute Heuristic agent actions
-        two = H_one.compute_action(new_obs)
-        three = H_two.compute_action(new_obs)
+        two = H_one.compute_action(new_obs, info)
+        three = H_two.compute_action(new_obs, info)
         
         #Step the environment
         #Opponents are BaseDefender & BaseAttacker

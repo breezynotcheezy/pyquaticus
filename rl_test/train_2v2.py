@@ -81,7 +81,7 @@ if __name__ == '__main__':
     config_dict = config_dict_std
     config_dict['sim_speedup_factor'] = 4
     config_dict['max_score'] = 3
-    config_dict['max_time']=240
+    config_dict['max_time']=120
     config_dict['tagging_cooldown'] = 60
     config_dict['tag_on_oob']=True
     
@@ -109,14 +109,22 @@ if __name__ == '__main__':
                 #'easy-defend-policy': (DefendGen(2, Team.RED_TEAM, 'easy', 2, env.par_env.agent_obs_normalizer), obs_space, act_space, {}),
                 #'easy-attack-policy': (AttackGen(3, Team.RED_TEAM, 'easy', 2, env.par_env.agent_obs_normalizer), obs_space, act_space, {})}
     env.close()
-    #Not using the Alpha Rllib (api_stack False) 
-    ppo_config = PPOConfig().api_stack(enable_rl_module_and_learner=False, enable_env_runner_and_connector_v2=False).environment(env='pyquaticus').env_runners(num_env_runners=50, num_cpus_per_env_runner=0.25)
+    # Safe Ray init: single-process debug mode to avoid oversubscription
+    ray.init(ignore_reinit_error=True, include_dashboard=False, local_mode=True, num_cpus=1, num_gpus=0)
+    # Not using the Alpha Rllib (api_stack False) and run conservatively
+    ppo_config = (
+        PPOConfig()
+        .api_stack(enable_rl_module_and_learner=False, enable_env_runner_and_connector_v2=False)
+        .environment(env='pyquaticus')
+        .env_runners(num_env_runners=1, num_cpus_per_env_runner=1.0)
+        .resources(num_gpus=0)
+    )
     #If your system allows changing the number of rollouts can significantly reduce training times (num_rollout_workers=15)
     ppo_config.multi_agent(policies=policies, policy_mapping_fn=policy_mapping_fn, policies_to_train=["agent-0-policy", "agent-1-policy"],)
     algo = ppo_config.build_algo()
     start = 0
     end = 0
-    for i in range(8001):
+    for i in range(20):
         print("Looping: ", i)
         start = time.time()
         algo.train()
