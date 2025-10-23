@@ -160,7 +160,7 @@ def train():
     state_size = env.observation_space(blue_agent_id).shape[0]
     action_size = env.action_space(blue_agent_id).n
     
-    # Create blue agent (our learning agent)
+    # Create blue agent (learning agent)
     blue_agent = AdvancedAgent(
         agent_id=blue_agent_id,
         env=env,
@@ -180,12 +180,12 @@ def train():
         )
     
     # Training parameters
-    n_episodes = 200  # Total number of episodes
-    max_t = 50  # Max steps per episode (reduced from 600)
+    n_episodes = 400  # Total number of episodes
+    max_t = 600  # Steps per episode (increase for better play)
     
     # Early stopping parameters
-    patience = 10  # Stop if no improvement for this many episodes
-    min_improvement = 0.1  # Minimum improvement to reset patience
+    patience = 20  # Stop if no improvement for this many episodes
+    min_improvement = 0.05  # Minimum improvement to reset patience
     best_score = -float('inf')
     no_improvement_count = 0
     save_dir = 'checkpoints'
@@ -230,20 +230,19 @@ def train():
             done = False
             t = 0
             
-            # Per-episode epsilon (simple linear decay)
-            eps = max(0.01, 1.0 - i_episode / n_episodes)
+            # Per-episode epsilons (decay for both agents)
+            eps_blue = max(0.05, 1.0 - i_episode / n_episodes)
+            eps_red = max(0.05, 1.0 - i_episode / n_episodes)
 
             while not done and t < max_t:
-                # Get actions for both agents
+                # Get actions for both agents (self-play)
                 blue_state = get_obs(obs_dict, blue_agent_id)
-                blue_action = blue_agent.act(blue_state, eps=eps)
+                blue_action = blue_agent.act(blue_state, eps=eps_blue)
 
                 actions = {blue_agent_id: int(blue_action)}
                 if red_agent_id is not None:
-                    # Red agent uses a simple policy (e.g., random or high exploration)
-                    red_eps = 0.9
                     red_state = get_obs(obs_dict, red_agent_id)
-                    red_action = red_agent.act(red_state, eps=red_eps)
+                    red_action = red_agent.act(red_state, eps=eps_red)
                     actions[red_agent_id] = int(red_action)
                 
                 # Take a step in the environment with both agents' actions
@@ -259,11 +258,9 @@ def train():
                     else:
                         raise ValueError(f"Unexpected step return format: {step_return}")
                     
-                    # Process the step return for blue agent (our learning agent)
-                    reward = float(get_val(rewards, blue_agent_id, 0.0))
-                    
-                    # Log the reward and done status
-                    logger.info(f"Processed reward: {reward}, done: {done}")
+                    # Process rewards for both agents
+                    reward_blue = float(get_val(rewards, blue_agent_id, 0.0))
+                    reward_red = float(get_val(rewards, red_agent_id, 0.0)) if red_agent_id is not None else 0.0
                     
                     # Handle different done formats
                     if isinstance(dones, dict):
@@ -276,24 +273,42 @@ def train():
                     if isinstance(truncated, dict) and truncated.get("__all__", False):
                         done = True
                     
-                    # Get the next state for blue agent
-                    next_state = get_obs(next_obs_dict, blue_agent_id)
-                        
-                    # Store the experience in the blue agent's replay buffer
+                    # Next states
+                    next_state_blue = get_obs(next_obs_dict, blue_agent_id)
+                    next_state_red = get_obs(next_obs_dict, red_agent_id) if red_agent_id is not None else None
+
+                    # Store experiences
                     blue_agent.step(
                         blue_state,
                         blue_action,
-                        reward,
-                        next_state,
+                        reward_blue,
+                        next_state_blue,
                         done
                     )
-                    
-                    # Update the target network
+                    if red_agent_id is not None:
+                        red_agent.step(
+                            red_state,
+                            red_action,
+                            reward_red,
+                            next_state_red,
+                            done
+                        )
+
+                    # Learn updates
                     if len(blue_agent.memory) > blue_agent.batch_size:
-                        blue_agent.learn(blue_agent.gamma)
+                        # Sample experiences and learn
+                        experiences = blue_agent.memory.sample()
+                        if experiences is not None:
+                            blue_agent.learn(experiences)
                     
-                    # Update the score and observation
-                    score += reward
+                    if red_agent_id is not None and len(red_agent.memory) > red_agent.batch_size:
+                        # Sample experiences and learn
+                        experiences = red_agent.memory.sample()
+                        if experiences is not None:
+                            red_agent.learn(experiences)
+
+                    # Update score (track blue by default) and advance
+                    score += reward_blue
                     obs_dict = next_obs_dict
                     t += 1
                     
@@ -310,22 +325,28 @@ def train():
             if recent_avg > best_score + min_improvement:
                 best_score = recent_avg
                 no_improvement_count = 0
-                best_path = os.path.join(save_dir, 'best.pth')
-                blue_agent.save(best_path)
-                logger.info(f"New best average score: {best_score:.2f}, saved to {best_path}")
+                best_blue = os.path.join(save_dir, 'best_blue.pth')
+                blue_agent.save(best_blue)
+                if red_agent_id is not None:
+                    best_red = os.path.join(save_dir, 'best_red.pth')
+                    red_agent.save(best_red)
+                logger.info(f"New best average score: {best_score:.2f}, saved blue->{best_blue}{' red->'+best_red if red_agent_id is not None else ''}")
             else:
                 no_improvement_count += 1
         
             # Log episode summary
             duration = (datetime.now() - episode_start_time).total_seconds()
             logger.info(f"Episode {i_episode} | Score: {score:.2f} | Recent Avg: {recent_avg:.2f} | Best: {best_score:.2f} | Steps: {t}")
-            logger.info(f"Time: {duration:.1f}s | Epsilon: {eps:.3f} | No improvement: {no_improvement_count}/{patience}")
+            logger.info(f"Time: {duration:.1f}s | Eps blue: {eps_blue:.3f} | Eps red: {eps_red:.3f} | No improvement: {no_improvement_count}/{patience}")
         
-            # Save checkpoint every 10 episodes
+            # Save checkpoint every 10 episodes (both agents)
             if i_episode % 10 == 0:
-                checkpoint_path = os.path.join(save_dir, f'checkpoint_{i_episode}.pth')
-                blue_agent.save(checkpoint_path)
-                logger.info(f"Saved checkpoint to {checkpoint_path}")
+                checkpoint_blue = os.path.join(save_dir, f'checkpoint_blue_{i_episode}.pth')
+                blue_agent.save(checkpoint_blue)
+                if red_agent_id is not None:
+                    checkpoint_red = os.path.join(save_dir, f'checkpoint_red_{i_episode}.pth')
+                    red_agent.save(checkpoint_red)
+                logger.info(f"Saved checkpoints: blue->{checkpoint_blue}{' red->'+checkpoint_red if red_agent_id is not None else ''}")
             
                 # Log memory stats
                 if hasattr(blue_agent, 'memory') and hasattr(blue_agent.memory, '__len__'):
@@ -343,10 +364,15 @@ def train():
             print(f"Error during training: {e}")
             continue
     
-    # Save final model
-    final_path = os.path.join(save_dir, 'final_model.pth')
-    blue_agent.save(final_path)
-    print(f'Training complete. Final model saved to {final_path}')
+    # Save final models
+    final_blue = os.path.join(save_dir, 'final_model_blue.pth')
+    blue_agent.save(final_blue)
+    if red_agent_id is not None:
+        final_red = os.path.join(save_dir, 'final_model_red.pth')
+        red_agent.save(final_red)
+        print(f'Training complete. Final models saved to {final_blue} and {final_red}')
+    else:
+        print(f'Training complete. Final model saved to {final_blue}')
     return scores
 
 if __name__ == "__main__":

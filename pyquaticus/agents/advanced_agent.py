@@ -173,24 +173,43 @@ class MultiStepBuffer:
     
     def sample(self):
         """Randomly sample a batch of experiences from memory."""
-        # Calculate sampling probabilities
-        priorities = np.array([e[5] for e in self.buffer if e is not None])
-        probs = priorities ** self.alpha
-        probs /= probs.sum()
-        
-        # Sample indices based on probabilities
-        indices = np.random.choice(len(self.buffer), self.batch_size, p=probs)
-        
-        # Calculate importance-sampling weights
-        weights = (len(self.buffer) * probs[indices]) ** (-self.beta)
-        weights /= weights.max()
-        
-        # Get samples
-        samples = [self.buffer[idx] for idx in indices]
-        states, actions, rewards, next_states, dones, _ = zip(*samples)
-        
-        return (np.array(states), np.array(actions), np.array(rewards), 
-                np.array(next_states), np.array(dones), indices, weights)
+        if len(self.buffer) < self.batch_size or len(self.buffer) == 0:
+            return None
+            
+        try:
+            # Calculate sampling probabilities
+            priorities = np.array([e[5] for e in self.buffer if e is not None])
+            probs = priorities ** self.alpha
+            probs_sum = probs.sum()
+            
+            # Handle case where all priorities are zero
+            if probs_sum == 0:
+                probs = np.ones_like(probs) / len(probs)
+            else:
+                probs = probs / probs_sum
+            
+            # Sample indices based on probabilities
+            indices = np.random.choice(len(self.buffer), min(self.batch_size, len(self.buffer)), p=probs, replace=False)
+            
+            # Get samples
+            samples = [self.buffer[idx] for idx in indices]
+            states, actions, rewards, next_states, dones, _ = zip(*samples)
+            
+            # Calculate importance-sampling weights
+            weights = (len(self.buffer) * probs[indices]) ** (-self.beta)
+            if len(weights) > 0:
+                weights = weights / weights.max()
+            
+            return (np.array(states, dtype=np.float32), 
+                   np.array(actions, dtype=np.int64), 
+                   np.array(rewards, dtype=np.float32), 
+                   np.array(next_states, dtype=np.float32), 
+                   np.array(dones, dtype=np.float32), 
+                   indices, 
+                   np.array(weights, dtype=np.float32))
+        except Exception as e:
+            print(f"Error in sample(): {e}")
+            return None
     
     def update_priorities(self, indices, priorities):
         """Update priorities of sampled transitions."""
@@ -302,8 +321,14 @@ class AdvancedAgent(BaseAgentPolicy):
             # If enough samples are available in memory, get random subset and learn
             if len(self.memory) > self.batch_size:
                 for _ in range(self.learn_num):
-                    experiences = self.memory.sample()
-                    self.learn(experiences)
+                    try:
+                        experiences = self.memory.sample()
+                        # Check if we got valid experiences
+                        if experiences is not None and len(experiences) == 7:  # 7 elements: states, actions, rewards, next_states, dones, indices, weights
+                            self.learn(experiences)
+                    except Exception as e:
+                        print(f"Warning: Error during experience sampling: {e}")
+                        continue
     
     def act(self, state, eps=None):
         """Returns actions for given state as per current policy.
@@ -334,19 +359,71 @@ class AdvancedAgent(BaseAgentPolicy):
         """Update value parameters using given batch of experience tuples.
 
         Args:
-            experiences: Tuple of (s, a, r, s', done, indices, weights)
+            experiences: Tuple of (s, a, r, s', done, indices, weights) or None if invalid
         """
-        states, actions, rewards, next_states, dones, indices, weights = experiences
-        
-        # Convert to PyTorch tensors
-        states = torch.FloatTensor(states).to(self.device)
-        actions = torch.LongTensor(actions).to(self.device).unsqueeze(1)
-        rewards = torch.FloatTensor(rewards).to(self.device).unsqueeze(1)
-        next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.FloatTensor(dones).to(self.device).unsqueeze(1)
-        weights = torch.FloatTensor(weights).to(self.device).unsqueeze(1)
-        
-        # Double DQN target: online net selects action, target net evaluates it
+        # Check if experiences is valid before unpacking
+        if experiences is None or not isinstance(experiences, (tuple, list)) or len(experiences) != 7:
+            print(f"Warning: Invalid experiences format: {experiences}")
+            return
+            
+        try:
+            states, actions, rewards, next_states, dones, indices, weights = experiences
+            
+            # Convert to PyTorch tensors
+            states = torch.FloatTensor(states).to(self.device)
+            actions = torch.LongTensor(actions).to(self.device).unsqueeze(1)
+            rewards = torch.FloatTensor(rewards).to(self.device).unsqueeze(1)
+            next_states = torch.FloatTensor(next_states).to(self.device)
+            dones = torch.FloatTensor(dones).to(self.device).unsqueeze(1)
+            weights = torch.FloatTensor(weights).to(self.device).unsqueeze(1)
+            
+            # Double DQN target: online net selects action, target net evaluates it
+            with torch.no_grad():
+                next_q_online = self.qnetwork_local(next_states)
+                next_actions = torch.argmax(next_q_online, dim=1, keepdim=True)
+                next_q_target = self.qnetwork_target(next_states).gather(1, next_actions)
+                Q_targets = rewards + (self.gamma * next_q_target * (1 - dones))
+            
+            # Get expected Q values from local model
+            Q_expected = self.qnetwork_local(states).gather(1, actions)
+            
+            # Compute loss with importance sampling weights
+            loss = (weights * F.mse_loss(Q_expected, Q_targets, reduction='none')).mean()
+            
+            # Minimize the loss
+            self.optimizer.zero_grad()
+            loss.backward()
+            
+            # Clip gradients to prevent explosion
+            torch.nn.utils.clip_grad_norm_(self.qnetwork_local.parameters(), 1.0)
+            
+            self.optimizer.step()
+            if hasattr(self, 'scheduler') and self.scheduler is not None:
+                self.scheduler.step()
+            
+            # Update target network
+            self.soft_update(self.tau)
+            
+            # Reset noise in noisy layers
+            self.qnetwork_local.reset_noise()
+            self.qnetwork_target.reset_noise()
+            
+            # Update priorities in replay buffer
+            with torch.no_grad():
+                td_errors = (Q_expected - Q_targets).abs().squeeze().cpu().numpy()
+                self.memory.update_priorities(indices, td_errors + 1e-5)  # Small constant to avoid zero priority
+            
+            # Update epsilon
+            self.eps = max(self.eps_end, self.eps_decay * self.eps)
+            
+            # Track loss
+            self.losses.append(loss.item())
+            
+        except Exception as e:
+            print(f"Error in learn(): {e}")
+            import traceback
+            traceback.print_exc()
+            return
         with torch.no_grad():
             next_q_online = self.qnetwork_local(next_states)
             next_actions = torch.argmax(next_q_online, dim=1, keepdim=True)

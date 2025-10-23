@@ -63,6 +63,38 @@ if __name__ == '__main__':
     config_dict['tagging_cooldown'] = 55
     config_dict['tag_on_oob']=True
 
+    # Ensure Ray is initialized (single-process mode for safety)
+    ray.init(ignore_reinit_error=True, include_dashboard=False, local_mode=True, num_cpus=1, num_gpus=0)
+
+    # Define RandPolicy so restoring checkpoints that reference __main__.RandPolicy works
+    class RandPolicy(Policy):
+        def __init__(self, observation_space, action_space, config):
+            Policy.__init__(self, observation_space, action_space, config)
+        def compute_actions(self,
+                            obs_batch,
+                            state_batches,
+                            prev_action_batch=None,
+                            prev_reward_batch=None,
+                            info_batch=None,
+                            episodes=None,
+                            **kwargs):
+            return [-1 for _ in obs_batch], [], {}
+        def get_weights(self):
+            return {}
+        def learn_on_batch(self, samples):
+            return {}
+        def set_weights(self, weights):
+            pass
+
+    # Register env so PPO.from_checkpoint() can resolve 'pyquaticus'
+    env_creator = lambda config: pyquaticus_v0.PyQuaticusEnv(
+        config_dict=config_dict,
+        render_mode=None,
+        reward_config=reward_config,
+        team_size=2,
+    )
+    register_env('pyquaticus', lambda config: ParallelPettingZooWrapper(env_creator(config)))
+
     #Create Environment
     env = pyquaticus_v0.PyQuaticusEnv(config_dict=config_dict,render_mode='human',reward_config=reward_config, team_size=2)
 
@@ -106,12 +138,21 @@ if __name__ == '__main__':
     from ray.rllib.algorithms.ppo import PPO
     def resolve_algo(path: str) -> PPO:
         p = path
-        if not (os.path.exists(p) and os.path.basename(p).startswith('checkpoint_')):
-            discovered = find_algo_checkpoint(p)
-            if discovered is None:
-                raise ValueError(f"Could not find a checkpoint under {p}. Pass a valid RLlib checkpoint path or a folder containing one.")
-            p = discovered
-        return PPO.from_checkpoint(p)
+        # 1) Try loading directly from directory path (newer RLlib returns a folder path)
+        if os.path.isdir(p):
+            try:
+                return PPO.from_checkpoint(p)
+            except Exception:
+                # Fall through to discovery
+                pass
+        # 2) If given a checkpoint_* path or a file, try directly
+        if os.path.exists(p) and os.path.basename(p).startswith('checkpoint_'):
+            return PPO.from_checkpoint(p)
+        # 3) Discover a checkpoint_* under the path or a marker file
+        discovered = find_algo_checkpoint(p)
+        if discovered is None:
+            raise ValueError(f"Could not find a checkpoint under {p}. Pass a valid RLlib checkpoint path or a folder containing one.")
+        return PPO.from_checkpoint(discovered)
 
     algo1 = resolve_algo(ckpt1)
     algo2 = resolve_algo(ckpt2) if ckpt2 != ckpt1 else algo1
@@ -119,6 +160,14 @@ if __name__ == '__main__':
     max_step = 2500
 
     while True:
+        # Handle window events to avoid OS 'Not Responding'
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                env.close()
+                sys.exit(0)
+            if event.type == KEYDOWN and event.key == K_ESCAPE:
+                env.close()
+                sys.exit(0)
         new_obs = {}
         #Get Unnormalized Observation for heuristic agents (H_one, and H_two)
         for k in obs:
@@ -134,22 +183,30 @@ if __name__ == '__main__':
             # Fallback: use algo1 if algo2 doesn't have the policy
             r1 = algo1.compute_single_action(obs['agent_1'], policy_id="agent-1-policy")
         one = r1[0] if isinstance(r1, (list, tuple)) else r1
-        #Compute Heuristic agent actions
-        two = H_one.compute_action(new_obs, info)
-        three = H_two.compute_action(new_obs, info)
-        
-        #Step the environment
-        #Opponents are BaseDefender & BaseAttacker
-        #obs, reward, term, trunc, info = env.step({'blue_0':zero, 'blue_1':one,'red_0':two,'red_1':three})
+        # Compute learned actions for red team as well
+        try:
+            r2 = algo1.compute_single_action(obs['agent_2'], policy_id="agent-2-policy")
+        except Exception:
+            r2 = algo2.compute_single_action(obs['agent_2'], policy_id="agent-2-policy")
+        two = r2[0] if isinstance(r2, (list, tuple)) else r2
 
-        #Opponents Don't Move:
-        obs, reward, term, trunc, info = env.step({'agent_0':zero,'agent_1':one, 'agent_2':-1, 'agent_3':-1})
+        try:
+            r3 = algo1.compute_single_action(obs['agent_3'], policy_id="agent-3-policy")
+        except Exception:
+            r3 = algo2.compute_single_action(obs['agent_3'], policy_id="agent-3-policy")
+        three = r3[0] if isinstance(r3, (list, tuple)) else r3
+        
+        #Step the environment with learned agents on both teams
+        obs, reward, term, trunc, info = env.step({'agent_0': zero,
+                                                   'agent_1': one,
+                                                   'agent_2': two,
+                                                   'agent_3': three})
         k =  list(term.keys())
         if step >= max_step:
             break
         step += 1
         if term[k[0]] == True or trunc[k[0]]==True:
-            env.reset()
+            obs, info = env.reset()
     env.close()
 
 

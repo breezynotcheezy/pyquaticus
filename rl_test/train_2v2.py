@@ -70,7 +70,7 @@ class RandPolicy(Policy):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a 2v2 policy in a 2v2 PyQuaticus environment')
     parser.add_argument('--render', help='Enable rendering', action='store_true')
-    reward_config = {'agent_0':rew.caps_and_grabs, 'agent_1':rew.caps_and_grabs, 'agent_2':None, 'agent_3':None} # Example Reward Config
+    reward_config = {'agent_0':rew.caps_and_grabs, 'agent_1':rew.caps_and_grabs, 'agent_2':rew.caps_and_grabs, 'agent_3':rew.caps_and_grabs} # Example Reward Config
     #Competitors: reward_config should be updated to reflect how you want to reward your learning agent
     
     args = parser.parse_args()
@@ -95,6 +95,10 @@ if __name__ == '__main__':
             return "agent-0-policy"
         if agent_id == 'agent_1':
             return "agent-1-policy"
+        if agent_id == 'agent_2':
+            return "agent-2-policy"
+        if agent_id == 'agent_3':
+            return "agent-3-policy"
         return "random"
         #elif agent_id == 2 or agent_id == 'agent-2':
             # change this to agent-1-policy to train both agents at once
@@ -104,6 +108,8 @@ if __name__ == '__main__':
     
     policies = {'agent-0-policy':(None, obs_space, act_space, {}), 
                 'agent-1-policy':(None, obs_space, act_space, {}),
+                'agent-2-policy':(None, obs_space, act_space, {}),
+                'agent-3-policy':(None, obs_space, act_space, {}),
                 'random':(RandPolicy, obs_space, act_space, {})}
                 #Examples of Heuristic Opponents in Rllib Training (See two lines below)
                 #'easy-defend-policy': (DefendGen(2, Team.RED_TEAM, 'easy', 2, env.par_env.agent_obs_normalizer), obs_space, act_space, {}),
@@ -120,16 +126,23 @@ if __name__ == '__main__':
         .resources(num_gpus=0)
     )
     #If your system allows changing the number of rollouts can significantly reduce training times (num_rollout_workers=15)
-    ppo_config.multi_agent(policies=policies, policy_mapping_fn=policy_mapping_fn, policies_to_train=["agent-0-policy", "agent-1-policy"],)
+    ppo_config.multi_agent(policies=policies, policy_mapping_fn=policy_mapping_fn, policies_to_train=["agent-0-policy", "agent-1-policy", "agent-2-policy", "agent-3-policy"],)
     algo = ppo_config.build_algo()
     start = 0
     end = 0
-    for i in range(20):
+    for i in range(1):
         print("Looping: ", i)
         start = time.time()
         algo.train()
         end = time.time()
         print("End Loop: ", end-start)
+        
+        # Save periodic checkpoint
         if np.mod(i, 500) == 0:
             print("Saving Checkpoint: ", i)
             chkpt_file = algo.save('./ray_test/iter_'+str(i)+'/')
+    
+    # Save final checkpoint
+    print("Saving final checkpoint...")
+    chkpt_file = algo.save('./ray_test/iter_last/')
+    print(f"Saved final checkpoint to: {chkpt_file}")
