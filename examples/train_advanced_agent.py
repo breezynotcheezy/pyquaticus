@@ -4,6 +4,15 @@ import numpy as np
 import torch
 import random
 from datetime import datetime
+import psutil
+import time
+
+# Limit CPU and memory usage
+p = psutil.Process()
+p.cpu_percent(interval=1)  # Initialize CPU monitoring
+
+# Set lower default tensor type to reduce memory usage
+torch.set_default_dtype(torch.float32)  # Use 32-bit floats instead of 64-bit
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -201,10 +210,20 @@ def train():
     logger.info("Starting training...")
     best_avg = -1e9
     
+    # Add resource monitoring
+    MAX_CPU_PERCENT = 80  # Limit CPU usage to 80%
+    MEMORY_CHECK_INTERVAL = 10  # Check memory every 10 steps
+    last_memory_check = time.time()
+    
     for i_episode in range(1, n_episodes + 1):
-        if no_improvement_count >= patience and i_episode > 10:  # Give it at least 10 episodes
-            logger.info(f"\nEarly stopping at episode {i_episode} - no improvement for {patience} episodes")
-            break
+        # Check system resources
+        current_time = time.time()
+        if current_time - last_memory_check > MEMORY_CHECK_INTERVAL:
+            cpu_percent = p.cpu_percent()
+            if cpu_percent > MAX_CPU_PERCENT:
+                logger.warning(f"High CPU usage: {cpu_percent}%. Pausing for 5 seconds...")
+                time.sleep(5)  # Pause to cool down
+            last_memory_check = current_time
             
         episode_start_time = datetime.now()
         logger.info(f"\n=== Starting episode {i_episode}/{n_episodes} (max {max_t} steps) ===")
@@ -233,9 +252,16 @@ def train():
             eps_red = max(0.05, 1.0 - i_episode / n_episodes)
 
             while not done and t < max_t:
+                # Add small delay to prevent CPU overload
+                time.sleep(0.001)
+                
                 # Get actions for both agents (self-play)
                 blue_state = get_obs(obs_dict, blue_agent_id)
                 blue_action = blue_agent.act(blue_state, eps=eps_blue)
+                
+                # Clear CUDA cache to prevent memory buildup
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
                 actions = {blue_agent_id: int(blue_action)}
                 if red_agent_id is not None:

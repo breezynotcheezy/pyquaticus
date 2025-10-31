@@ -10,14 +10,18 @@ import os
 from ..base_policies.base_policy import BaseAgentPolicy, EnvType
 from pyquaticus.envs.pyquaticus import Team, PyQuaticusEnv
 
-# Hyperparameters
+# Hyperparameters (reduced to prevent crashes)
 GAMMA = 0.99
 LR = 0.0003
 TAU = 1e-3
-BUFFER_SIZE = int(1e6)
-BATCH_SIZE = 1024
+BUFFER_SIZE = int(1e5)  # Reduced from 1M to 100K
+BATCH_SIZE = 256       # Reduced from 1024 to 256
 UPDATE_EVERY = 4
 LEARN_NUM = 1
+
+# Reduce network size
+FC1_UNITS = 256  # Reduced from 512
+FC2_UNITS = 256  # Reduced from 512
 
 # Prioritized Experience Replay
 ALPHA = 0.6
@@ -86,7 +90,7 @@ class NoisyLinear(nn.Module):
 
 class DuelingNetwork(nn.Module):
     """Dueling Network Architecture"""
-    def __init__(self, state_size, action_size, seed, fc1_units=512, fc2_units=512):
+    def __init__(self, state_size, action_size, seed, fc1_units=256, fc2_units=256):  # Reduced network size
         super(DuelingNetwork, self).__init__()
         self.seed = torch.manual_seed(seed)
         
@@ -356,15 +360,9 @@ class AdvancedAgent(BaseAgentPolicy):
             return random.choice(np.arange(self.action_size))
     
     def learn(self, experiences):
-        """Update value parameters using given batch of experience tuples.
-
-        Args:
-            experiences: Tuple of (s, a, r, s', done, indices, weights) or None if invalid
-        """
-        # Check if experiences is valid before unpacking
-        if experiences is None or not isinstance(experiences, (tuple, list)) or len(experiences) != 7:
-            print(f"Warning: Invalid experiences format: {experiences}")
-            return
+        """Update value parameters using given batch of experience tuples."""
+        if experiences is None or len(experiences) < 2:  # Skip learning if not enough samples
+            return 0.0
             
         try:
             states, actions, rewards, next_states, dones, indices, weights = experiences
@@ -378,14 +376,13 @@ class AdvancedAgent(BaseAgentPolicy):
             weights = torch.FloatTensor(weights).to(self.device).unsqueeze(1)
             
             # Double DQN target: online net selects action, target net evaluates it
-            with torch.no_grad():
-                next_q_online = self.qnetwork_local(next_states)
-                next_actions = torch.argmax(next_q_online, dim=1, keepdim=True)
-                next_q_target = self.qnetwork_target(next_states).gather(1, next_actions)
-                Q_targets = rewards + (self.gamma * next_q_target * (1 - dones))
-            
-            # Get expected Q values from local model
-            Q_expected = self.qnetwork_local(states).gather(1, actions)
+            with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                # Compute Q targets for current states 
+                Q_expected = self.qnetwork_local(states).gather(1, actions)
+                # Get max predicted Q values (for next states) from target model
+                Q_targets_next = self.qnetwork_target(next_states).detach().max(1)[0].unsqueeze(1)
+                # Compute Q targets for current states 
+                Q_targets = rewards + (self.gamma * Q_targets_next * (1 - dones))
             
             # Compute loss with importance sampling weights
             loss = (weights * F.mse_loss(Q_expected, Q_targets, reduction='none')).mean()
@@ -424,17 +421,6 @@ class AdvancedAgent(BaseAgentPolicy):
             import traceback
             traceback.print_exc()
             return
-        with torch.no_grad():
-            next_q_online = self.qnetwork_local(next_states)
-            next_actions = torch.argmax(next_q_online, dim=1, keepdim=True)
-            next_q_target = self.qnetwork_target(next_states).gather(1, next_actions)
-            Q_targets = rewards + (self.gamma * next_q_target * (1 - dones))
-        
-        # Get expected Q values from local model
-        Q_expected = self.qnetwork_local(states).gather(1, actions)
-        
-        # Compute loss with importance sampling weights
-        loss = (weights * F.mse_loss(Q_expected, Q_targets, reduction='none')).mean()
         
         # Minimize the loss
         self.optimizer.zero_grad()
