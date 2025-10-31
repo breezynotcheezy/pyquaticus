@@ -76,14 +76,12 @@ def train():
         try:
             team_idx = int(team)
             other_team_idx = int(not team_idx)
-            # determine index of this agent
             if isinstance(agents, (list, tuple)):
                 i = list(agents).index(agent_id) if agent_id in agents else 0
             elif isinstance(agents, dict):
                 i = list(agents.keys()).index(agent_id) if agent_id in agents else 0
             else:
                 i = 0
-            # positions
             pos = state["agent_position"][i]
             prev_pos = prev_state["agent_position"][i] if prev_state is not None else pos
             enemy_flag_pos = state["flag_home"][other_team_idx]

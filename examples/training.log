@@ -9191,3 +9191,51 @@ TypeError: cannot unpack non-iterable float object
 === Starting episode 7/400 (max 600 steps) ===
 2025-10-22 20:31:01,994 - INFO - Resetting environment...
 2025-10-22 20:31:01,997 - INFO - Environment reset. Agents: ['agent_0', 'agent_1']
+2025-10-22 20:32:04,060 - INFO - Episode 7 | Score: -6.88 | Recent Avg: 1.99 | Best: 7.00 | Steps: 300
+2025-10-22 20:32:04,060 - INFO - Time: 62.1s | Eps blue: 0.983 | Eps red: 0.983 | No improvement: 4/20
+2025-10-22 20:32:04,061 - INFO - 
+=== Starting episode 8/400 (max 600 steps) ===
+2025-10-22 20:32:04,061 - INFO - Resetting environment...
+2025-10-22 20:32:04,064 - INFO - Environment reset. Agents: ['agent_0', 'agent_1']
+2025-10-29 19:29:13,498 - INFO - Creating environment...
+2025-10-29 19:29:13,517 - INFO - Primary agent: agent_0, Opponent agent: agent_1
+2025-10-29 19:29:13,518 - INFO - Environment created successfully
+2025-10-29 19:29:13,518 - INFO - Possible agents: ['agent_0', 'agent_1']
+2025-10-29 19:29:13,519 - INFO - Agent agent_0 - Action space: Discrete(17)
+2025-10-29 19:29:13,519 - INFO - Agent agent_0 - Observation space: Box(-1.0, 1.0, (29,), float32)
+2025-10-29 19:29:13,520 - INFO - Agent agent_1 - Action space: Discrete(17)
+2025-10-29 19:29:13,520 - INFO - Agent agent_1 - Observation space: Box(-1.0, 1.0, (29,), float32)
+2025-10-29 19:29:13,521 - INFO - Environment setup complete
+2025-10-29 19:29:13,521 - INFO - Wired shaped_reward for agents: ['agent_0', 'agent_1']
+2025-10-29 19:29:15,779 - INFO - Saving checkpoints to: C:\Users\green\Documents\GitHub\pyquaticus\examples\checkpoints\run_20251029_192915
+2025-10-29 19:29:15,779 - INFO - Starting training...
+2025-10-29 19:29:15,781 - INFO - 
+=== Starting episode 1/400 (max 600 steps) ===
+2025-10-29 19:29:15,781 - INFO - Resetting environment...
+2025-10-29 19:29:15,785 - INFO - Environment reset. Agents: ['agent_0', 'agent_1']
+2025-10-29 19:29:17,577 - INFO - New best average score: -0.37, saved blue->checkpoints\run_20251029_192915\best_blue.pth red->checkpoints\run_20251029_192915\best_red.pth
+2025-10-29 19:29:17,578 - INFO - Episode 1 | Score: -0.37 | Recent Avg: -0.37 | Best: -0.37 | Steps: 300
+2025-10-29 19:29:17,579 - INFO - Time: 1.8s | Eps blue: 0.998 | Eps red: 0.998 | No improvement: 0/20
+2025-10-29 19:29:17,580 - INFO - 
+=== Starting episode 2/400 (max 600 steps) ===
+2025-10-29 19:29:17,580 - INFO - Resetting environment...
+2025-10-29 19:29:17,583 - INFO - Environment reset. Agents: ['agent_0', 'agent_1']
+2025-10-29 19:29:19,258 - INFO - Episode 2 | Score: -10.50 | Recent Avg: -10.50 | Best: -0.37 | Steps: 300
+2025-10-29 19:29:19,258 - INFO - Time: 1.7s | Eps blue: 0.995 | Eps red: 0.995 | No improvement: 1/20
+2025-10-29 19:29:19,259 - INFO - 
+=== Starting episode 3/400 (max 600 steps) ===
+2025-10-29 19:29:19,260 - INFO - Resetting environment...
+2025-10-29 19:29:19,262 - INFO - Environment reset. Agents: ['agent_0', 'agent_1']
+2025-10-29 19:29:20,978 - INFO - New best average score: 7.00, saved blue->checkpoints\run_20251029_192915\best_blue.pth red->checkpoints\run_20251029_192915\best_red.pth
+2025-10-29 19:29:20,978 - INFO - Episode 3 | Score: 7.00 | Recent Avg: 7.00 | Best: 7.00 | Steps: 300
+2025-10-29 19:29:20,979 - INFO - Time: 1.7s | Eps blue: 0.993 | Eps red: 0.993 | No improvement: 0/20
+2025-10-29 19:29:20,980 - INFO - 
+=== Starting episode 4/400 (max 600 steps) ===
+2025-10-29 19:29:20,980 - INFO - Resetting environment...
+2025-10-29 19:29:20,984 - INFO - Environment reset. Agents: ['agent_0', 'agent_1']
+2025-10-29 19:30:05,653 - INFO - Episode 4 | Score: 2.12 | Recent Avg: 2.12 | Best: 7.00 | Steps: 300
+2025-10-29 19:30:05,653 - INFO - Time: 44.7s | Eps blue: 0.990 | Eps red: 0.990 | No improvement: 1/20
+2025-10-29 19:30:05,655 - INFO - 
+=== Starting episode 5/400 (max 600 steps) ===
+2025-10-29 19:30:05,656 - INFO - Resetting environment...
+2025-10-29 19:30:05,660 - INFO - Environment reset. Agents: ['agent_0', 'agent_1']
