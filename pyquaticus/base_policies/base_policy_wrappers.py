@@ -20,13 +20,19 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 from ray.rllib.policy.policy import Policy
-from typing import Union
+from typing import Union, TYPE_CHECKING
 
 from pyquaticus.base_policies.base_attack import BaseAttacker
 from pyquaticus.base_policies.base_combined import Heuristic_CTF_Agent
 from pyquaticus.base_policies.base_defend import BaseDefender
 from pyquaticus.envs.pyquaticus import PyQuaticusEnv
-from pyquaticus.moos_bridge.pyquaticus_moos_bridge import PyQuaticusMoosBridge
+
+# Avoid importing MOOS bridge (and thus pymoos) at runtime unless type-checking
+if TYPE_CHECKING:
+    from pyquaticus.moos_bridge.pyquaticus_moos_bridge import PyQuaticusMoosBridge
+else:
+    class PyQuaticusMoosBridge:  # type: ignore
+        pass
 
 
 class RandPolicy(Policy):
@@ -102,7 +108,7 @@ class NoOp(Policy):
         pass
 
 
-def AttackGen(agent_id: str, env: Union[PyQuaticusEnv, PyQuaticusMoosBridge], mode: str):
+def AttackGen(agent_id: str, env: Union[PyQuaticusEnv, 'PyQuaticusMoosBridge'], mode: str):
 
     class AttackPolicy(Policy):
         """
@@ -152,7 +158,7 @@ def AttackGen(agent_id: str, env: Union[PyQuaticusEnv, PyQuaticusMoosBridge], mo
     return AttackPolicy
 
 
-def DefendGen(agent_id: str, env: Union[PyQuaticusEnv, PyQuaticusMoosBridge], mode: str):
+def DefendGen(agent_id: str, env: Union[PyQuaticusEnv, 'PyQuaticusMoosBridge'], mode: str):
     class DefendPolicy(Policy):
         """
         Creates a defender policy
@@ -201,7 +207,7 @@ def DefendGen(agent_id: str, env: Union[PyQuaticusEnv, PyQuaticusMoosBridge], mo
     return DefendPolicy
 
 
-def CombinedGen(agent_id: str, env: Union[PyQuaticusEnv, PyQuaticusMoosBridge], mode: str):
+def CombinedGen(agent_id: str, env: Union[PyQuaticusEnv, 'PyQuaticusMoosBridge'], mode: str):
     class CombinedPolicy(Policy):
         """
         Creates a combined (attacker and defender) policy

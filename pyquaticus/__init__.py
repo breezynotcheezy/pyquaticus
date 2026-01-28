@@ -19,7 +19,15 @@
 
 # SPDX-License-Identifier: BSD-3-Clause
 
-from pettingzoo.utils.deprecated_module import deprecated_handler
+try:
+    from pettingzoo.utils.deprecated_module import deprecated_handler
+except Exception:  # Fallback for newer PettingZoo versions without deprecated_module
+    import importlib
+    def deprecated_handler(env_name, path, name):
+        try:
+            return importlib.import_module(f".{env_name}", package=name)
+        except Exception as e:
+            raise ModuleNotFoundError(f"Could not load '{env_name}' in package '{name}': {e}")
 
 
 def __getattr__(env_name):

@@ -32,7 +32,14 @@ from pyquaticus.base_policies.utils import (dist_rel_bearing_to_local_rect,
                                             unit_vect_between_points)
 from pyquaticus.config import config_dict_std
 from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
-from pyquaticus.moos_bridge.pyquaticus_moos_bridge import PyQuaticusMoosBridge
+# Make MOOS bridge optional
+try:
+    from pyquaticus.moos_bridge.pyquaticus_moos_bridge import PyQuaticusMoosBridge
+except ImportError:
+    class PyQuaticusMoosBridge:
+        """Dummy class for when MOOS bridge is not available."""
+        pass
+        
 from pyquaticus.utils.utils import angle180, closest_point_on_line, dist
 
 MODES = {"nothing", "easy", "medium", "hard", "competition_easy", "competition_medium"}

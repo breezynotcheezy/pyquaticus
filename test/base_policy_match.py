@@ -1,4 +1,4 @@
-from pyquaticus import pyquaticus_v0
+from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
 from pyquaticus.base_policies.base_attack import BaseAttacker
 from pyquaticus.base_policies.base_defend import BaseDefender
 from pyquaticus.base_policies.deprecated.base_attack import (
@@ -23,7 +23,7 @@ config_dict["normalize_obs"] = False
 config_dict["normalize_state"] = True
 config_dict["render_agent_ids"] = True
 
-env = pyquaticus_v0.PyQuaticusEnv(
+env = PyQuaticusEnv(
     team_size=2, config_dict=config_dict, render_mode="human", action_space="continuous"
 )
 
@@ -75,6 +75,7 @@ b_one = Heuristic_CTF_Agent(
 
 b_two = KeyAgent()
 step = 0
+try:
 while True:
     two = r_one_new.compute_action(obs, info)
     two_old = r_one_old.compute_action(obs)
@@ -119,7 +120,7 @@ while True:
         raise Exception("Heuristic policies don't match")
     one = b_two.compute_action(obs, info)
 
-    obs, reward, term, trunc, info = env.step(
+    next_obs_dict, rewards, dones, infos = env.step(
         {"agent_0": zero, "agent_1": one, "agent_2": two, "agent_3": three}
     )
     k = list(term.keys())
@@ -128,3 +129,9 @@ while True:
         break
 
 env.close()
+
+except KeyboardInterrupt:
+    print("Test stopped by user")
+finally:
+    env.close()
+    print("Environment closed.")

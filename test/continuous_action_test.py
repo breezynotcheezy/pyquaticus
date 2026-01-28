@@ -1,40 +1,74 @@
+import numpy as np
 import sys
 import os
 import os.path
-import pyquaticus
-from pyquaticus import pyquaticus_v0
-from pyquaticus.base_policies.base_attack import BaseAttacker
-from pyquaticus.base_policies.base_defend import BaseDefender
-from pyquaticus.base_policies.base_combined import Heuristic_CTF_Agent
-from pyquaticus.envs.pyquaticus import Team
-from collections import OrderedDict
-from pyquaticus.config import ACTION_MAP
-import copy
+from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
 
-config_dict = {}
-config_dict["max_time"] = 600.0
-config_dict["sim_speedup_factor"] = 8
-config_dict["max_score"] = 100
-config_dict["render_agent_ids"] = True
+# Configuration for the environment - only use recognized parameters
+config_dict = {
+    "max_time": 600.0,
+    "sim_speedup_factor": 8,
+    "max_score": 100,
+    "render_agent_ids": True
+}
 
-env = pyquaticus_v0.PyQuaticusEnv(team_size=1, config_dict=config_dict,render_mode='human')
-term_g = {'agent_0':False,'agent_1':False}
-truncated_g = {'agent_0':False,'agent_1':False}
+# Create the environment
+env = PyQuaticusEnv(
+    team_size=1,  # 1v1
+    config_dict=config_dict,
+    render_mode='human'  # Set to 'rgb_array' for headless
+)
 
-term = term_g
-trunc = truncated_g
-obs = env.reset()
+# Reset the environment
+obs, info = env.reset()
 
-step = 0
-while True:
+# Get agent IDs from the environment
+agent_ids = env.possible_agents
 
-    blue_action = [1,90] # speed, heading (in degrees)
-    red_action = [0.7,45]
+try:
+    step = 0
+    while True:
+        
+        # Simple policy: move forward with slight turns
+        # [forward_velocity, angular_velocity]
+        blue_action = [1.0, 0.5]  # Move forward and turn right
+        red_action = [0.7, -0.3]  # Move forward and turn left
+        
+        # Create action dictionary
+        actions = {}
+        for agent_id in agent_ids:
+            # For continuous actions, use [forward_velocity, angular_velocity]
+            if 'blue' in agent_id:
+                actions[agent_id] = [1.0, 0.5]  # Move forward and turn right
+            else:
+                actions[agent_id] = [4, -0.3]  # Move forward and turn left
+        
+        # Take a step
+        step_return = env.step(actions)
+        
+        # Handle different return formats
+        if len(step_return) == 5:  # New format: obs, reward, done, truncated, info
+            next_obs, rewards, dones, truncated, infos = step_return
+        elif len(step_return) == 4:  # Old format: obs, reward, done, info
+            next_obs, rewards, dones, infos = step_return
+            truncated = {agent_id: False for agent_id in agent_ids}
+            
+        # Update observations
+        obs = next_obs
+        
+        # Check if any agent is done
+        if any(dones.values()):
+            print("Episode finished!")
+            break
+            
+        step += 1
+        if step > 1000:  # Prevent infinite loops
+            print("Max steps reached")
+            break
+            
+except KeyboardInterrupt:
+    print("Test stopped by user")
     
-    obs, reward, term, trunc, info = env.step({'agent_0':blue_action,'agent_1':red_action})
-    k =  list(term.keys())
-
-    step += 1
-    if term[k[0]] == True or trunc[k[0]]==True:
-        break
-env.close()
+finally:
+    # Always close the environment
+    env.close()

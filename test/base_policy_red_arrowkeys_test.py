@@ -1,3 +1,4 @@
+import numpy as np
 # DISTRIBUTION STATEMENT A. Approved for public release. Distribution is unlimited.
 #
 # This material is based upon work supported by the Under Secretary of Defense for
@@ -32,7 +33,7 @@ from pyquaticus.envs.pyquaticus import Team
 from pyquaticus.base_policies.base_combined import Heuristic_CTF_Agent
 from pyquaticus.base_policies.base_attack import BaseAttacker
 from pyquaticus.base_policies.base_defend import BaseDefender
-from pyquaticus import pyquaticus_v0
+from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
 
 RENDER_MODE = 'human'
 
@@ -76,7 +77,8 @@ class KeyTest:
 
 
     def begin(self):
-        while True:
+        try:
+while True:
             action_dict = self.process_event(self.quittable)
             
             self.obs, rewards, terminated, truncated, self.info = self.env.step(action_dict)
@@ -112,6 +114,12 @@ if __name__ == '__main__':
     config['sim_speedup_factor'] = 5
 
     #PyQuaticusEnv is a Parallel Petting Zoo Environment
-    env = pyquaticus_v0.PyQuaticusEnv(render_mode='human', team_size=1, config_dict=config)
+    env = PyQuaticusEnv(render_mode='human', team_size=1, config_dict=config)
     kt = KeyTest(env)
     kt.begin()
+
+except KeyboardInterrupt:
+    print("Test stopped by user")
+finally:
+    env.close()
+    print("Environment closed.")

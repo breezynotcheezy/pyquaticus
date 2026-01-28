@@ -41,7 +41,7 @@ import time
 from pyquaticus.envs.pyquaticus import Team
 import pyquaticus.config
 import copy
-from pyquaticus import pyquaticus_v0
+from pyquaticus.envs.pyquaticus import PyQuaticusEnv, Team
 import pyquaticus.utils.rewards as reward
 
 
@@ -102,7 +102,8 @@ class KeyTest:
         self.red_agent_id = self.env.agents_of_team[Team.RED_TEAM][0].id
 
     def begin(self):
-        while True:
+        try:
+while True:
             action_dict = self.process_event(self.quittable)
             self.obs, rewards, terminated, truncated, info = self.env.step(action_dict)
             k = list(terminated.keys())
@@ -201,7 +202,7 @@ def main():
     }
 
     # PyQuaticusEnv is a Parallel Petting Zoo Environment
-    env = pyquaticus_v0.PyQuaticusEnv(
+    env = PyQuaticusEnv(
         render_mode="human", team_size=1, config_dict=config
     )
     red_policy = args.red_policy
@@ -214,3 +215,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+except KeyboardInterrupt:
+    print("Test stopped by user")
+finally:
+    env.close()
+    print("Environment closed.")
