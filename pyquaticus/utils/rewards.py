@@ -213,3 +213,94 @@ def caps_and_grabs(
     return reward
 
 ### Add Custom Reward Functions Here ###
+
+def hierarchical_role_reward(
+    agent_id: str,
+    team: Team,
+    agents: list,
+    agent_inds_of_team: dict,
+    state: dict,
+    prev_state: dict,
+    env_size: np.ndarray,
+    agent_radius: np.ndarray,
+    catch_radius: float,
+    scrimmage_coords: np.ndarray,
+    max_speeds: list,
+    tagging_cooldown: float,
+    role_id: int = 0  # 0=ATTACK, 1=DEFEND, 2=INTERCEPT
+):
+    """
+    Role-based reward shaping for hierarchical agents.
+    
+    Args:
+        role_id: Current role of the agent (0=ATTACK, 1=DEFEND, 2=INTERCEPT)
+        
+    Returns:
+        Computed reward based on role and game state
+    """
+    reward = 0.0
+    
+    # Get agent index
+    agent_idx = agents.index(agent_id)
+    
+    # Basic capture/grab rewards (dominant terms)
+    for t in state['grabs']:
+        prev_num_grabs = prev_state['grabs'][t] if 'grabs' in prev_state else 0
+        num_grabs = state['grabs'][t]
+        if num_grabs > prev_num_grabs:
+            reward += 0.5 if t == team else -0.5  # Medium positive for flag pickup
+
+        prev_num_caps = prev_state['captures'][t] if 'captures' in prev_state else 0
+        num_caps = state['captures'][t]
+        if num_caps > prev_num_caps:
+            reward += 2.0 if t == team else -2.0  # Big positive for score/capture
+    
+    # Get tagged penalty (medium negative)
+    prev_is_tagged = prev_state['agent_is_tagged'][agent_idx] if 'agent_is_tagged' in prev_state else False
+    is_tagged = state['agent_is_tagged'][agent_idx]
+    if is_tagged and not prev_is_tagged:
+        reward += -0.5
+    
+    # Out of bounds penalty (medium negative)
+    prev_num_oob = prev_state['agent_oob'][agent_idx] if 'agent_oob' in prev_state else 0
+    num_oob = state['agent_oob'][agent_idx]
+    if num_oob > prev_num_oob:
+        reward += -0.3
+    
+    # Distance shaping (tiny rewards based on role)
+    if len(state['agent_position']) > agent_idx and len(state['flag_position']) >= 2:
+        agent_pos = state['agent_position'][agent_idx]
+        prev_agent_pos = prev_state['agent_position'][agent_idx] if 'agent_position' in prev_state else agent_pos
+        
+        # Flag positions
+        enemy_flag_idx = 1 - team.value
+        home_flag_idx = team.value
+        enemy_flag_pos = state['flag_position'][enemy_flag_idx]
+        home_flag_pos = state['flag_position'][home_flag_idx]
+        
+        def distance(pos1, pos2):
+            return np.linalg.norm(np.array(pos1) - np.array(pos2))
+        
+        # Role-specific distance rewards
+        if role_id == 0:  # ATTACK
+            # Reward for getting closer to enemy flag
+            prev_dist = distance(prev_agent_pos, enemy_flag_pos)
+            curr_dist = distance(agent_pos, enemy_flag_pos)
+            if curr_dist < prev_dist:
+                reward += 0.001 * (prev_dist - curr_dist)  # Tiny reward for reducing distance
+        
+        elif role_id == 1:  # DEFEND
+            # Tiny reward for staying within radius of home flag
+            dist_to_home = distance(agent_pos, home_flag_pos)
+            if dist_to_home < 200:  # Within defense radius
+                reward += 0.0001  # Tiny reward for defending
+        
+        # Flag carrier bonus (applies to ATTACK role when carrying)
+        if len(state['agent_has_flag']) > agent_idx and state['agent_has_flag'][agent_idx]:
+            # Reward for getting closer to home when carrying flag
+            prev_dist = distance(prev_agent_pos, home_flag_pos)
+            curr_dist = distance(agent_pos, home_flag_pos)
+            if curr_dist < prev_dist:
+                reward += 0.002 * (prev_dist - curr_dist)  # Small reward for returning
+    
+    return reward
