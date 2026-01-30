@@ -195,20 +195,29 @@ def caps_and_grabs(
     tagging_cooldown: float
 ):
     reward = 0.0
-    prev_num_oob = state['agent_oob'][agents.index(agent_id)]
+    prev_num_oob = prev_state['agent_oob'][agents.index(agent_id)]
     num_oob = state['agent_oob'][agents.index(agent_id)]
     if num_oob > prev_num_oob:
         reward += -1.0
-    for t in state['grabs']:
-        prev_num_grabs = state['grabs'][t]
+
+    #Check if agents lost flag
+    prev_has_flag = prev_state['agent_has_flag'][agents.index(agent_id)]
+    has_flag = state['agent_has_flag'][agents.index(agent_id)]
+    #Agent lost flag
+    if (prev_has_flag > has_flag): 
+        reward += -0.25
+    
+    #Grabs and captures are of shape [team_0 (BLUE), team_1 (RED)] the value at the index 0 corresponds to the number of grabs
+    for t in range(len(state['grabs'])):
+        prev_num_grabs = prev_state['grabs'][t]
         num_grabs = state['grabs'][t]
         if num_grabs > prev_num_grabs:
-            reward += 0.25 if t == team else -0.25
+            reward += 0.25 if t == int(team) else -0.25
 
-        prev_num_caps = state['captures'][t]
+        prev_num_caps = prev_state['captures'][t]
         num_caps = state['captures'][t]
         if num_caps > prev_num_caps:
-            reward += 1.0 if t == team else -1.0
+            reward += 1.0 if t == int(team) else -1.0
 
     return reward
 
