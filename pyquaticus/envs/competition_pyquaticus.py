@@ -171,23 +171,23 @@ class CompPyquaticusEnv(PyQuaticusEnv):
 
         # assert 'tag_probability' in config_dict and 'power_play_percentage' in config_dict, 
         #   "Error: Please use MCTF competition configuration dictionary"
-        
-        self.tag_probability = config_dict['tag_probability']
+        cd = copy.deepcopy(config_dict)
+        self.tag_probability = cd['tag_probability']
 
         # assert config_dict['power_play_percentage'] <= 0.5,
         #   "Power Play Percentage cannot exceed 50%% of game time"
-        self.power_play_percentage = config_dict['power_play_percentage']
-        self.untag_radius = config_dict['untag_radius']
-        self.tag_speed_frac = config_dict['tag_speed_frac']
+        self.power_play_percentage = cd['power_play_percentage']
+        self.untag_radius = cd['untag_radius']
+        self.tag_speed_frac = cd['tag_speed_frac']
 
-        del config_dict['tag_probability']
-        del config_dict['power_play_percentage']
-        del config_dict['untag_radius']
-        del config_dict['tag_speed_frac']
+        del cd['tag_probability']
+        del cd['power_play_percentage']
+        del cd['untag_radius']
+        del cd['tag_speed_frac']
 
         
         # Handle Normal MCTF Configurations
-        super().set_config_values(config_dict)
+        super().set_config_values(cd)
     def _check_untag(self):
         """Untags the player if they return to their own home base."""
 
