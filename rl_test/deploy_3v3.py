@@ -47,6 +47,10 @@ from ray.rllib.policy.policy import Policy
 from pyquaticus.config import config_dict_std
 from pyquaticus.envs.rllib_pettingzoo_wrapper import ParallelPettingZooWrapper
 import pyquaticus.utils.rewards as rew
+from pyquaticus import pyquaticus_v0
+from pyquaticus.mctf26_config import config_dict_std as mctf_config
+
+from pyquaticus.envs.competition_pyquaticus import CompPyquaticusEnv
 
 RENDER_MODE = 'human'
 if __name__ == '__main__':
@@ -56,16 +60,12 @@ if __name__ == '__main__':
     parser.add_argument('policy_three', help='Please enter the path to the model you would like to load in Ex. ./ray_test/checkpoint_00001/policies/agent-2-policy')
     reward_config = {}
     args = parser.parse_args()
-    config_dict = config_dict_std
-    config_dict['sim_speedup_factor'] = 4
-    config_dict['max_score'] = 3
-    config_dict['max_time']=240
-    config_dict['tagging_cooldown'] = 60
-    config_dict['tag_on_oob']=True
+    config_dict = mctf_config
+   
 
 
     #Create Environment
-    env = pyquaticus_v0.PyQuaticusEnv(config_dict=config_dict,render_mode='human',reward_config=reward_config, team_size=3)
+    env = CompPyquaticusEnv(config_dict=config_dict,render_mode='human',reward_config=reward_config)
     
     obs,_ = env.reset()
     

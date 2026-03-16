@@ -33,6 +33,10 @@ import os
 import pyquaticus.utils.rewards as rew
 from pyquaticus.base_policies.base_policy_wrappers import DefendGen, AttackGen
 from pyquaticus.config import config_dict_std
+from pyquaticus import pyquaticus_v0
+from pyquaticus.mctf26_config import config_dict_std as mctf_config
+
+from pyquaticus.envs.competition_pyquaticus import CompPyquaticusEnv
 import logging
 class RandPolicy(Policy):
     """
@@ -70,7 +74,7 @@ class RandPolicy(Policy):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train a 3v3 policy in a 3v3 PyQuaticus environment')
     parser.add_argument('--render', help='Enable rendering', action='store_true')
-    reward_config = {'agent_0':rew.caps_and_grabs, 'agent_1':rew.caps_and_grabs, 'agent_2':rew.caps_and_grabs, 'agent_3':None, 'agent_4':None, 'agent_5':None} # Example Reward Config
+    reward_config = {'agent_0':rew.caps_and_grabs, 'agent_1':rew.caps_and_grabs, 'agent_2':rew.caps_and_grabs, 'agent_3':rew.caps_and_grabs, 'agent_4':rew.caps_and_grabs, 'agent_5':rew.caps_and_grabs} # Example Reward Config
     #Competitors: reward_config should be updated to reflect how you want to reward your learning agent
     
     args = parser.parse_args()
@@ -78,15 +82,11 @@ if __name__ == '__main__':
 
     RENDER_MODE = 'human' if args.render else None #set to 'human' if you want rendered output
     
-    config_dict = config_dict_std
-    config_dict['sim_speedup_factor'] = 4
-    config_dict['max_score'] = 3
-    config_dict['max_time']=240
-    config_dict['tagging_cooldown'] = 60
-    config_dict['tag_on_oob']=True
+    config_dict = mctf_config
+    # config_dict['sim_speedup_factor'] = 4
     
-    env_creator = lambda config: pyquaticus_v0.PyQuaticusEnv(config_dict=config_dict,render_mode=RENDER_MODE, reward_config=reward_config, team_size=3)
-    env = ParallelPettingZooWrapper(pyquaticus_v0.PyQuaticusEnv(config_dict=config_dict,render_mode=RENDER_MODE, reward_config=reward_config, team_size=3))
+    env_creator = lambda config: CompPyquaticusEnv(config_dict=config_dict,render_mode=RENDER_MODE, reward_config=reward_config)
+    env = ParallelPettingZooWrapper(CompPyquaticusEnv(config_dict=config_dict,render_mode=RENDER_MODE, reward_config=reward_config))
     register_env('pyquaticus', lambda config: ParallelPettingZooWrapper(env_creator(config)))
     obs_space = env.observation_space['agent_0']
     act_space = env.action_space['agent_0']
@@ -123,4 +123,5 @@ if __name__ == '__main__':
         if np.mod(i, 500) == 0:
             print("Saving Checkpoint: ", i)
             chkpt_file = algo.save('./ray_test/iter_'+str(i)+'/')
+            break
     
