@@ -184,9 +184,9 @@ class PyQuaticusEnvBase(ParallelEnv, ABC):
         Args:
             seed (optional): starting seed
         """
-        if seed is not None:
-            random.seed(seed)
-            self._np_random, self._np_random_seed = seeding.np_random(seed)
+        #if seed is not None:
+        random.seed(seed)
+        self._np_random, self._np_random_seed = seeding.np_random(seed)
 
     def _to_speed_heading(self, raw_action, player, act_space_match, act_space_str):
         """
