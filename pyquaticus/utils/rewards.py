@@ -217,7 +217,7 @@ def caps_and_grabs(
         prev_num_caps = prev_state['captures'][t]
         num_caps = state['captures'][t]
         if num_caps > prev_num_caps:
-            reward += 1.25 if t == int(team) else -1.0
+            reward += 1.0 if t == int(team) else -1.0
 
     return reward
 
