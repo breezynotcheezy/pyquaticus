@@ -137,7 +137,7 @@ class CompPyquaticusEnv(PyQuaticusEnv):
 
         #Attempt to find two random times x length apart
         for i in range(10):
-            power_slot_one = random.randint(0,self.max_cycles-self.power_play_length)
+            power_slot_one = self._np_random.integers(0, int(self.max_cycles-self.power_play_length))#random.randint(0,self.max_cycles-self.power_play_length)
             #Restrict Ranges and select second if not possible retry selecting power slot one
             next_range = []
             if not power_slot_one < self.power_play_length:
@@ -147,10 +147,10 @@ class CompPyquaticusEnv(PyQuaticusEnv):
             if len(next_range) <= 0:
                 # Couldn't get two valid slots retry
                 continue
-            power_slot_two = next_range[random.randint(0,len(next_range)-1)]
+            power_slot_two = self._np_random.choice(next_range)#next_range[random.randint(0,len(next_range)-1)]
             break
         #
-        if random.random() < 0.5:
+        if self._np_random.random() < 0.5:
             self.red_power_start = power_slot_one
             self.blue_power_start = power_slot_two
         else:
@@ -240,7 +240,7 @@ class CompPyquaticusEnv(PyQuaticusEnv):
                             player.pos, other_player.pos
                         )
                         if agent_distance < self.catch_radius:
-                            if random.random() <= self.tag_probability:
+                            if self._np_random.random() <= self.tag_probability:
                                 team_idx = int(player.team)
                                 other_team_idx = int(other_player.team)
 
@@ -405,12 +405,13 @@ class CompPyquaticusEnv(PyQuaticusEnv):
 
         #Check if we need to start a power play
         if self.current_cycle == self.red_power_start and self.current_cycle < self.red_power_start + self.power_play_length:
-            agent_idx = red_team_idx[random.randint(0, len(red_team_idx)-1)]
+            
+            agent_idx = red_team_idx[self._np_random.integers(0, len(red_team_idx)-1)]
             self.state["disabled_agents"][agent_idx] = True
             self.players[f"agent_{agent_idx}"].is_disabled = True
 
         if self.current_cycle == self.blue_power_start and self.current_cycle < self.blue_power_start + self.power_play_length:
-            agent_idx = blue_team_idx[random.randint(0, len(blue_team_idx)-1)]
+            agent_idx = blue_team_idx[self._np_random.integers(0, len(blue_team_idx)-1)]
             self.state["disabled_agents"][agent_idx] = True
             self.players[f"agent_{agent_idx}"].is_disabled = True
 
